@@ -80,6 +80,8 @@
   - name: Wait for install to complete
     ansible.builtin.command:
       cmd: ./openshift-install wait-for install-complete --dir billi --log-level debug
+    ignore_errors: yes
+
 #  - name: Remove openshift-install
 #    ansible.builtin.file:
 #      path: openshift-install
