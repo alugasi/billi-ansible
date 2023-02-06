@@ -78,8 +78,8 @@
 #    ansible.builtin.command:
 #      cmd: ./openshift-install agent wait-for install-complete --dir billi --log-level debug
   - name: Wait for install to complete
-    ansible.builtin.command:
-      cmd: ./openshift-install wait-for install-complete --dir billi --log-level debug
+    ansible.builtin.pause:
+      minutes: 30
     ignore_errors: yes
 
 #  - name: Remove openshift-install
