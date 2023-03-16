@@ -77,7 +77,7 @@
       group: apache
   - name: Boot hosts with iso
     ansible.builtin.command:
-      cmd: "{{ playbook_dir }}/boot.py {{ ansible_inventory_sources[0] }}"
+      cmd: "/opt/cnf_venv/bin/python boot.py {{ ansible_inventory_sources[0] }}"
   - name: Remove agent iso
     ansible.builtin.file:
       path: billi/agent.x86_64.iso
@@ -92,4 +92,7 @@
       state: absent
   - name: Wait for install to complete
     ansible.builtin.command:
-      cmd: ./openshift-install wait-for install-complete --dir billi --log-level debug
+      cmd: "./openshift-install wait-for install-complete --dir {{ cluster }} --log-level debug"
+    register: installresult
+    until: installresult is not failed
+    retries: 2
