@@ -17,7 +17,7 @@ default_bmc_model = data.get('bmc_model', 'dell')
 iso_url = data.get('iso_url')
 if not iso_url:
     ipaddr = socket.gethostbyname(socket.gethostname())
-    iso_url = f"http://{ipaddr}/agent.x86_64.iso"
+    iso_url = f"http://{ipaddr}/helix50.iso"
 
 hosts = data['hosts']
 for host in hosts:
