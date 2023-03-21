@@ -90,20 +90,6 @@
     ansible.builtin.file:
       path: "billi/agent-config.yaml"
       state: absent
-  - name: start firewalld
-    service:
-      name: firewalld
-      state: started
-      enabled: yes
-  - name: Allow tcp port 6443
-    shell:
-      cmd: firewall-cmd --permanent --add-port 6443/tcp
-    become: yes
-  - name: restart firewalld service
-    service:
-      name: firewalld
-      state: reloaded
-    become: yes
   - name: Wait for install to complete
     ansible.builtin.command:
       cmd: "./openshift-install wait-for install-complete --dir billi --log-level debug"
