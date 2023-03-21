@@ -95,12 +95,14 @@
       name: firewalld
       state: started
       enabled: yes
-  - name: enable 6443
-    firewalld:
-      zone: public
-      port: 6443/tcp
-      permanent: true
-      state: enabled
+  - name: Allow tcp port 6443
+    shell:
+      cmd: firewall-cmd --permanent --add-port 6443/tcp
+    become: yes
+  - name: restart firewalld service
+    service:
+      name: firewalld
+      state: restarted
     become: yes
   - name: Wait for install to complete
     ansible.builtin.command:
