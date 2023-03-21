@@ -102,7 +102,7 @@
   - name: restart firewalld service
     service:
       name: firewalld
-      state: restarted
+      state: reloaded
     become: yes
   - name: Wait for install to complete
     ansible.builtin.command:
