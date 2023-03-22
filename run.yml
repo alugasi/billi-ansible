@@ -109,4 +109,7 @@
   - name: Pause for 20 minute to let cluster initalize 
     ansible.builtin.pause:
       minutes: 20
+  - name: Disable swap
+    ansible.builtin.shell:
+      cmd: swapoff -a
 
