@@ -97,6 +97,7 @@
     ansible.builtin.command:
       cmd: "./openshift-install wait-for install-complete --dir billi --log-level debug"
     register: installresult
+    until: installresult is not failed
     ignore_errors: true
   - name: Register kubeconfig file
     ansible.builtin.stat:
