@@ -39,7 +39,7 @@
   - name: Grab openshift-client from internet
     ansible.builtin.unarchive:
       src: "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux.tar.gz"
-      dest: "."
+      dest: .
       remote_src: true
       creates: oc
   - name: Template get_installer.sh.j2
@@ -90,9 +90,23 @@
     ansible.builtin.file:
       path: "billi/agent-config.yaml"
       state: absent
+  - name: copy oc to PATH
+    shell:
+      cmd: cp oc /usr/bin
   - name: Wait for install to complete
     ansible.builtin.command:
       cmd: "./openshift-install wait-for install-complete --dir billi --log-level debug"
     register: installresult
-    until: installresult is not failed
-    retries: 2
+    ignore_errors: true
+  - name: Register kubeconfig file
+    ansible.builtin.stat:
+      path: /mnt/tests/gitlab.cee.redhat.com/sobarzan/steal-beaker/-/archive/rampup/steal-beaker-rampup.tar.gz/sysrep/billi-ansible/billi/auth/kubeconfig
+    register: kubecon
+  - name: Fail if the kubeconfig file does not exists
+    ansible.builtin.fail:
+      msg: "kubeconfig file does not exists"
+    when: kubecon.stat.exists == False
+  - name: Pause for 20 minute to let cluster initalize 
+    ansible.builtin.pause:
+      minutes: 20
+
