@@ -106,7 +106,7 @@
     ansible.builtin.fail:
       msg: "kubeconfig file does not exists"
     when: kubecon.stat.exists == False
-  - name: Pause for 20 minute to let cluster initalize 
+  - name: Pause for 20 minutes to let cluster initalize 
     ansible.builtin.pause:
       minutes: 20
   - name: Disable swap
