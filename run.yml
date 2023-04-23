@@ -115,7 +115,8 @@
     ansible.builtin.command:
       cmd: "./openshift-install wait-for install-complete --dir billi --log-level debug"
     register: installresult
-    ignore_errors: true
+    until: installresult is not failed
+    retries: 2
   - name: Register kubeconfig file
     ansible.builtin.stat:
       path: /mnt/tests/gitlab.cee.redhat.com/sobarzan/steal-beaker/-/archive/rampup/steal-beaker-rampup.tar.gz/sysrep/billi-ansible/billi/auth/kubeconfig
