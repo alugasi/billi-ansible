@@ -98,7 +98,7 @@
       cmd: "/opt/cnf_venv/bin/python boot.py {{ ansible_inventory_sources[0] }}"
   - name: Remove agent iso
     ansible.builtin.file:
-      path: "billi/agent.x86_64.iso"
+      path: "billi/helix50.iso"
       state: absent
   - name: Remove install-config.yaml
     ansible.builtin.file:

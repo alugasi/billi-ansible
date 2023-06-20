@@ -18,6 +18,7 @@ iso_url = data.get('iso_url')
 if not iso_url:
     ipaddr = socket.gethostbyname(socket.gethostname())
     iso_url = f"http://{ipaddr}/helix50.iso"
+print ("****************** DEBUG ************** isourl = ", iso_url)
 
 hosts = data['hosts']
 for host in hosts:

@@ -117,11 +117,14 @@ class Redfish(object):
             headers['Content-Length'] = 0
         data = {"Image": iso_url, "Inserted": True}
         insert_url = self.get_iso_insert_url()
+        print("insert_url = ", insert_url)
         if self.debug:
             print(f"Sending POST to {insert_url} with data {data}")
         data = json.dumps(data).encode('utf-8')
         request = Request(insert_url, data=data, headers=headers)
-        urlopen(request, context=self.context)
+        print("request = ", request.data)
+        context = ssl._create_unverified_context()
+        urlopen(request, context=context)
 
     def set_iso_once(self):
         request = Request(self.url, headers=self.headers)
