@@ -1,5 +1,5 @@
 version: stable
-tag: 4.13
+# tag: 4.13
 openshift_image:
 manifests: manifests
 extra_manifests: extra_manifests

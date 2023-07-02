@@ -2,7 +2,7 @@ export PULL_SECRET="{{ pull_secret|default('openshift_pull.json') }}"
 {% if version in ['dev-preview', 'stable'] %}
 {% set tag = tag|string %}
 {% if tag.split('.')|length > 2 %}
-TAG={{ tag }}
+TAG=$(cat /root/ocp_ver.txt)
 {% else %}
 TAG={{"latest-" + tag }}
 {% endif %}
