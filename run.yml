@@ -60,14 +60,14 @@
       dest: .
       remote_src: true
       creates: oc
-  - name: get ocp build env var
+  - name: get ocp release image
     debug:
       msg: "{{ item }}"
-    with_lines: cat /root/ocp_ver.txt
-    register: ocversion
+    with_lines: cat /root/ocp_release_image.txt
+    register: oc_release_image
   - name: set fact 
     set_fact:
-      tag: "{{ ocversion.results[0].item }}"
+      oc_release_img: "{{ oc_release_image.results[0].item }}"
   - name: Template get_installer.sh.j2
     template:
       src: get_installer.sh.j2
