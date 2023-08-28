@@ -1,4 +1,4 @@
 export PULL_SECRET="{{ pull_secret|default('openshift_pull.json') }}"
 OCP_REPO={{ 'ocp-dev-preview' if version == 'dev-preview' else 'ocp' }}
-export OPENSHIFT_RELEASE_IMAGE=$(curl -s {{ oc_release_img }}release.txt | grep 'Pull From: quay.io' | awk -F ' ' '{print $3}')
+export OPENSHIFT_RELEASE_IMAGE=$(curl -s {{ oc_release_img }}release.txt | grep 'Pull From' | awk -F ' ' '{print $3}')
 ./oc adm release extract --registry-config $PULL_SECRET --command=openshift-install --to . $OPENSHIFT_RELEASE_IMAGE
