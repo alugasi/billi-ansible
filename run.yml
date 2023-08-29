@@ -103,7 +103,7 @@
       group: apache
   - name: Boot hosts with iso
     ansible.builtin.command:
-      cmd: "{{ venv_path|default('') }} {{ playbook_dir }}/boot.py {{ ansible_inventory_sources[0] }}"
+      cmd: "{{ python_venv_path|default('') }} {{ playbook_dir }}/boot.py {{ ansible_inventory_sources[0] }}"
   - name: Remove agent iso
     ansible.builtin.file:
       path: "{{ cluster }}/helix50.iso"
@@ -125,9 +125,24 @@
     register: installresult
     until: installresult is not failed
     retries: 2
+  - name: Remove old clusterconfigs dir
+    ansible.builtin.file:
+      path: "/root/clusterconfigs"
+      state: absent
+    become: yes
+  - name: Create clusterconfigs dir
+    become: yes
+    ansible.builtin.file:
+      path: "/root/clusterconfigs"
+      state: directory
+      mode: '0755'
+  - name: Copy auth to /root/clusterconfigs
+    copy:
+      src: "{{ cluster }}/auth"
+      dest: "/root/clusterconfigs"
   - name: Register kubeconfig file
     ansible.builtin.stat:
-      path: /mnt/tests/gitlab.cee.redhat.com/sobarzan/steal-beaker/-/archive/rampup/steal-beaker-rampup.tar.gz/sysrep/billi-ansible/billi/auth/kubeconfig
+      path: /root/clusterconfigs/auth/kubeconfig
     register: kubecon
   - name: Fail if the kubeconfig file does not exists
     ansible.builtin.fail:
