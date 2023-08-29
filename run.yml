@@ -4,7 +4,7 @@
   tasks:
   - name: Load pull_secret
     include_vars:
-      file: "{{ pull_secret|default('openshift_pull.json') }}"
+      ansible.builtin.file: "{{ pull_secret|default('openshift_pull.json') }}"
       name: pull_secret_data
   - name: Set pull_secret_data variable
     set_fact:
@@ -50,7 +50,7 @@
         dest: "{{ manifests }}/sno-workload-partitioning.yml"
     when: sno_cpuset is defined
   - name: Copy manifests
-    copy:
+    ansible.builtin.copy:
       src: "{{ manifests }}/"
       dest: "{{ cluster }}/openshift"
     when: manifests is directory
@@ -60,16 +60,22 @@
       dest: "."
       remote_src: true
       creates: oc
+  - name: Check if ocp release image file exist exists
+    ansible.builtin.stat:
+      path: "/root/ocp_release_image.txt"
+    register: ocp_release_image_file_status
   - name: get ocp release image
-    debug:
+    ansible.builtin.debug:
       msg: "{{ item }}"
     with_lines: cat /root/ocp_release_image.txt
     register: oc_release_image
+    when: ocp_release_image_file_status.stat.exists
   - name: set fact 
     set_fact:
       oc_release_img: "{{ oc_release_image.results[0].item }}"
+    when: ocp_release_image_file_status.stat.exists
   - name: Template get_installer.sh.j2
-    template:
+    ansible.builtin.template:
       src: get_installer.sh.j2
       dest: get_installer.sh
     when: disconnected_url is not defined
@@ -97,7 +103,7 @@
     command: "cp {{ cluster }}/agent.x86_64.iso /var/www/html/{{ cluster }}.iso"
   - name: Make agent iso available
     become: yes
-    file:
+    ansible.builtin.file:
       path: "/var/www/html/{{ cluster }}.iso"
       owner: apache
       group: apache
@@ -137,7 +143,7 @@
       state: directory
       mode: '0755'
   - name: Copy auth to /root/clusterconfigs
-    copy:
+    ansible.builtin.copy:
       src: "{{ cluster }}/auth"
       dest: "/root/clusterconfigs"
   - name: Register kubeconfig file
