@@ -20,17 +20,17 @@
     when: disconnected_url is defined and ca is not defined
   - name: Create Billi directory to hold assets
     ansible.builtin.file:
-      path: billi
+      path: "{{ cluster }}"
       state: directory
       mode: '0755'
   - name: Render install config
     ansible.builtin.template:
       src: install-config.yaml.j2
-      dest: "billi/install-config.yaml"
+      dest: "{{ cluster }}/install-config.yaml"
   - name: Render agent config
     ansible.builtin.template:
       src: agent-config.yaml.j2
-      dest: "billi/agent-config.yaml"
+      dest: "{{ cluster }}/agent-config.yaml"
   - name: Create manifest for workload partitioning
     block:
     - name: Create manifest directory
@@ -51,13 +51,13 @@
     when: sno_cpuset is defined
   - name: Copy manifests
     copy:
-      src: "{{ manifests }}"
-      dest: billi
+      src: "{{ manifests }}/"
+      dest: "{{ cluster }}/openshift"
     when: manifests is directory
   - name: Grab openshift-client from internet
     ansible.builtin.unarchive:
       src: "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux.tar.gz"
-      dest: .
+      dest: "."
       remote_src: true
       creates: oc
   - name: get ocp release image
@@ -86,15 +86,15 @@
     when: disconnected_url is defined
   - name: Generate iso
     ansible.builtin.command:
-      cmd: "./openshift-install agent create image --dir billi --log-level debug"
-      creates: "billi/agent.x86_64.iso"
+      cmd: "./openshift-install agent create image --dir {{ cluster }} --log-level debug"
+      creates: "{{ cluster }}/agent.x86_64.iso"
   - name: Remove old agent iso
     ansible.builtin.file:
       path: "/var/www/html/{{ cluster }}.iso"
       state: absent
   - name: Copy agent iso to /var/www/html
     become: yes
-    command: "cp billi/agent.x86_64.iso /var/www/html/{{ cluster }}.iso"
+    command: "cp {{ cluster }}/agent.x86_64.iso /var/www/html/{{ cluster }}.iso"
   - name: Make agent iso available
     become: yes
     file:
@@ -103,25 +103,25 @@
       group: apache
   - name: Boot hosts with iso
     ansible.builtin.command:
-      cmd: "/opt/cnf_venv/bin/python boot.py {{ ansible_inventory_sources[0] }}"
+      cmd: "{{ venv_path|default('') }} {{ playbook_dir }}/boot.py {{ ansible_inventory_sources[0] }}"
   - name: Remove agent iso
     ansible.builtin.file:
-      path: "billi/helix50.iso"
+      path: "{{ cluster }}/helix50.iso"
       state: absent
   - name: Remove install-config.yaml
     ansible.builtin.file:
-      path: "billi/install-config.yaml"
+      path: "{{ cluster }}/install-config.yaml"
       state: absent
   - name: Remove agent-config.yaml
     ansible.builtin.file:
-      path: "billi/agent-config.yaml"
+      path: "{{ cluster }}/agent-config.yaml"
       state: absent
   - name: copy oc to PATH
     shell:
       cmd: cp oc /usr/bin
   - name: Wait for install to complete
     ansible.builtin.command:
-      cmd: "./openshift-install wait-for install-complete --dir billi --log-level debug"
+      cmd: "./openshift-install wait-for install-complete --dir {{ cluster }} --log-level debug"
     register: installresult
     until: installresult is not failed
     retries: 2
