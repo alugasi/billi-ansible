@@ -4,77 +4,59 @@ import base64
 import json
 import os
 import ssl
-import re
 import sys
 from uuid import UUID
 
 
-def valid_uuid(uuid):
-    try:
-        UUID(uuid)
-        return True
-    except:
-        return False
-
-
-def get_info(url, user, password):
-    match = re.match('.*/redfish/v1/Systems/(.*)', url)
-    if '/redfish/v1/Systems' in url and\
-       (valid_uuid(os.path.basename(url)) or (match is not None and len(match.group(1).split('/')) == 2)):
-        model = 'virtual'
-        user = user or 'fake'
-        password = password or 'fake'
-        return model, url, user, password
-    oem_url = f"https://{url}" if '://' not in url else url
-    p = urlparse(oem_url)
-    headers = {'Accept': 'application/json'}
-    request = Request(f"https://{p.netloc}/redfish/v1", headers=headers)
-    oem = json.loads(urlopen(request).read())['Oem']
-    model = "dell" if 'Dell' in oem else "hp" if 'Hpe' in oem else 'supermicro' if 'Supermicro' in oem else 'N/A'
-    if '://' not in url:
-        if model in ['hp', 'supermicro']:
-            url = f"https://{url}/redfish/v1/Systems/1"
-        elif model == 'dell':
-            url = f"https://{url}/redfish/v1/Systems/System.Embedded.1"
-            user = user or 'root'
-            password = password or 'calvin'
-        else:
-            print(f"Invalid url {url}")
-            sys.exit(0)
-    return model, url, user, password
-
-
 class Redfish(object):
-    def __init__(self, url, user='root', password='calvin', insecure=True, debug=False, model=None):
+    def __init__(self, url, user='root', password='calvin', insecure=True, model='dell', debug=False):
         self.debug = debug
-        self.headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
-        if insecure:
-            ssl._create_default_https_context = ssl._create_unverified_context
+        self.model = model.lower()
+        try:
+            UUID(os.path.basename(url))
+            self.model = 'virtual'
+        except:
+            pass
         url = url.replace('idrac-virtualmedia', 'https').replace('ilo5-virtualmedia', 'https')
-        self.model, self.url, self.user, self.password = get_info(url, user, password)
+        if '://' not in url:
+            if self.model in ['hp', 'hpe', 'supermicro']:
+                url = f"https://{url}/redfish/v1/Systems/1"
+            elif self.model == 'dell':
+                url = f"https://{url}/redfish/v1/Systems/System.Embedded.1"
+            else:
+                print(f"Invalid url {url}")
+                sys.exit(0)
+        p = urlparse(url)
+        self.url = url
         if self.debug:
             print(f"Using base url {self.url}")
-        p = urlparse(self.url)
-        self.baseurl = f"{p.scheme}://{p.netloc}"
-        credentials = base64.b64encode(bytes(f'{self.user}:{self.password}', 'ascii')).decode('utf-8')
+        self.user = user
+        self.password = password
+        self.headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
+        credentials = base64.b64encode(bytes(f'{user}:{password}', 'ascii')).decode('utf-8')
         self.headers["Authorization"] = f"Basic {credentials}"
+        self.baseurl = f"{p.scheme}://{p.netloc}"
         self.manager_url = None
+        self.context = ssl.create_default_context()
+        if insecure:
+            self.context.check_hostname = False
+            self.context.verify_mode = ssl.CERT_NONE
 
     def get_manager_url(self):
         request = Request(self.url, headers=self.headers)
-        response = json.loads(urlopen(request).read())
+        response = json.loads(urlopen(request, context=self.context).read())
         return f"{self.baseurl}{response['Links']['ManagedBy'][0]['@odata.id']}"
 
     def get_iso_url(self):
         manager_url = self.get_manager_url()
         request = Request(f'{manager_url}', headers=self.headers)
-        results = json.loads(urlopen(request).read())
+        results = json.loads(urlopen(request, context=self.context).read())
         if 'VirtualMedia' in results:
             virtual_media_url = results['VirtualMedia']['@odata.id']
         else:
             virtual_media_url = results['Status']['VirtualMedia']['@odata.id']
         request = Request(f'{self.baseurl}{virtual_media_url}', headers=self.headers)
-        results = json.loads(urlopen(request).read())
+        results = json.loads(urlopen(request, context=self.context).read())
         if 'Oem' in results:
             odata = results['Oem']['Supermicro']['VirtualMediaConfig']['@odata.id']
         else:
@@ -89,13 +71,13 @@ class Redfish(object):
         if self.debug:
             print(f"Getting {iso_url}")
         request = Request(iso_url, headers=self.headers)
-        response = json.loads(urlopen(request).read())
+        response = json.loads(urlopen(request, context=self.context).read())
         return f"{response['Image']}"
 
     def get_iso_eject_url(self):
         iso_url = self.get_iso_url()
         request = Request(iso_url, headers=self.headers)
-        actions = json.loads(urlopen(request).read())['Actions']
+        actions = json.loads(urlopen(request, context=self.context).read())['Actions']
         target = '#IsoConfig.UnMount' if self.model == 'supermicro' else '#VirtualMedia.EjectMedia'
         t = actions[target]['target']
         return f"{self.baseurl}{t}"
@@ -103,7 +85,7 @@ class Redfish(object):
     def get_iso_insert_url(self):
         iso_url = self.get_iso_url()
         request = Request(iso_url, headers=self.headers)
-        actions = json.loads(urlopen(request).read())['Actions']
+        actions = json.loads(urlopen(request, context=self.context).read())['Actions']
         target = '#IsoConfig.Mount' if self.model == 'supermicro' else '#VirtualMedia.InsertMedia'
         t = actions[target]['target']
         return f"{self.baseurl}{t}"
@@ -118,7 +100,7 @@ class Redfish(object):
         if self.debug:
             print(f"Sending POST to {eject_url} with empty data")
         request = Request(eject_url, headers=headers, method='POST', data=data)
-        urlopen(request)
+        urlopen(request, context=self.context)
 
     def insert_iso(self, iso_url):
         headers = self.headers.copy()
@@ -131,19 +113,22 @@ class Redfish(object):
                 print(f"Sending PATCH to {cd_url} with data {data}")
             data = json.dumps(data).encode('utf-8')
             request = Request(cd_url, data=data, headers=self.headers, method='PATCH')
-            urlopen(request)
+            urlopen(request, context=self.context)
             headers['Content-Length'] = 0
         data = {"Image": iso_url, "Inserted": True}
         insert_url = self.get_iso_insert_url()
+        print("insert_url = ", insert_url)
         if self.debug:
             print(f"Sending POST to {insert_url} with data {data}")
         data = json.dumps(data).encode('utf-8')
         request = Request(insert_url, data=data, headers=headers)
-        urlopen(request)
+        print("request = ", request.data)
+        context = ssl._create_unverified_context()
+        urlopen(request, context=context)
 
     def set_iso_once(self):
         request = Request(self.url, headers=self.headers)
-        response = json.loads(urlopen(request).read())
+        response = json.loads(urlopen(request, context=self.context).read())
         currentboot = response['Boot']
         newboot = {}
         if currentboot['BootSourceOverrideEnabled'] != 'Once':
@@ -157,11 +142,11 @@ class Redfish(object):
             print(f"Sending PATCH to {self.url} with data {data}")
         data = json.dumps(data).encode('utf-8')
         request = Request(self.url, data=data, headers=self.headers, method='PATCH')
-        urlopen(request)
+        urlopen(request, context=self.context)
 
     def restart(self):
         request = Request(self.url, headers=self.headers)
-        response = json.loads(urlopen(request).read())
+        response = json.loads(urlopen(request, context=self.context).read())
         reset_type = 'On' if response['PowerState'] == 'Off' else 'ForceRestart'
         data = {"ResetType": reset_type}
         reset_url = f"{self.url}/Actions/ComputerSystem.Reset"
@@ -169,7 +154,7 @@ class Redfish(object):
             print(f"Sending POST to {reset_url} with data {data}")
         data = json.dumps(data).encode('utf-8')
         request = Request(reset_url, data=data, headers=self.headers)
-        urlopen(request)
+        urlopen(request, context=self.context)
 
     def stop(self):
         data = {"ResetType": "ForceOff"}
@@ -178,7 +163,7 @@ class Redfish(object):
             print(f"Sending POST to {reset_url} with data {data}")
         data = json.dumps(data).encode('utf-8')
         request = Request(reset_url, data=data, headers=self.headers)
-        urlopen(request)
+        urlopen(request, context=self.context)
 
     def start(self):
         data = {"ResetType": "On"}
@@ -187,16 +172,16 @@ class Redfish(object):
             print(f"Sending POST to {reset_url} with {data}")
         data = json.dumps(data).encode('utf-8')
         request = Request(reset_url, data=data, headers=self.headers)
-        urlopen(request)
+        urlopen(request, context=self.context)
 
     def status(self):
         request = Request(self.url, headers=self.headers)
-        response = json.loads(urlopen(request).read())
+        response = json.loads(urlopen(request, context=self.context).read())
         return response['PowerState']
 
     def info(self):
         request = Request(self.url, headers=self.headers)
-        response = json.loads(urlopen(request).read())
+        response = json.loads(urlopen(request, context=self.context).read())
         return response
 
     def reset(self):
@@ -207,7 +192,7 @@ class Redfish(object):
             print(f"Sending POST to {reset_url} with data {data}")
         data = json.dumps(data).encode('utf-8')
         request = Request(reset_url, headers=self.headers, method='POST', data=data)
-        urlopen(request)
+        urlopen(request, context=self.context)
 
     def set_iso(self, iso_url):
         try:
@@ -215,8 +200,5 @@ class Redfish(object):
         except:
             pass
         self.insert_iso(iso_url)
-        try:
-            self.set_iso_once()
-        except:
-            self.set_iso_once()
+        self.set_iso_once()
         self.restart()
