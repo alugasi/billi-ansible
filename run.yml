@@ -23,6 +23,14 @@
       path: "{{ cluster }}"
       state: directory
       mode: '0755'
+  - name: Strip extra hosts
+    set_fact:
+      hosts={{ hosts[:nodes|int] }}
+    when: nodes is defined and nodes|int < hosts|length
+  - name: Force sno when nodes is set to 1
+    set_fact: 
+      sno=True
+    when: nodes is defined and nodes|int == 1
   - name: Render install config
     ansible.builtin.template:
       src: install-config.yaml.j2
@@ -49,6 +57,24 @@
         src: workload-partitioning/sno-workload-partitioning.yml.j2
         dest: "{{ manifests }}/sno-workload-partitioning.yml"
     when: sno_cpuset is defined
+  - name: Create Contrail manifests
+    block:
+    - name: Create manifest directory
+      ansible.builtin.file:
+       path: "{{ manifests }}"
+       state: directory
+       mode: '0755'
+    - name: Set ignition_config_overrides
+      set_fact:
+        ignition_config_override: "{\"ignition\":{\"version\":\"3.1.0\"},\"systemd\":{\"units\":[{\"name\":\"ca-patch.service\",\"enabled\":true,\"contents\":\"[Service]\\nType=oneshot\\nExecStart=/usr/local/bin/ca-patch.sh\\n\\n[Install]\\nWantedBy=multi-user.target\"}]},\"storage\":{\"files\":[{\"path\":\"/usr/local/bin/ca-patch.sh\",\"mode\":720,\"contents\":{\"source\":\"data:text/plain;charset=utf-8;base64,IyEvYmluL2Jhc2gKc3VjY2Vzcz0wCnVudGlsIFsgJHN1Y2Nlc3MgLWd0IDEgXTsgZG8KICB0bXA9JChta3RlbXApCiAgY2F0IDw8RU9GPiR7dG1wfSB8fCB0cnVlCmRhdGE6CiAgcmVxdWVzdGhlYWRlci1jbGllbnQtY2EtZmlsZTogfAokKHdoaWxlIElGUz0gcmVhZCAtYSBsaW5lOyBkbyBlY2hvICIgICAgJGxpbmUiOyBkb25lIDwgPChjYXQgL2V0Yy9rdWJlcm5ldGVzL2Jvb3RzdHJhcC1zZWNyZXRzL2FnZ3JlZ2F0b3ItY2EuY3J0KSkKRU9GCiAgS1VCRUNPTkZJRz0vZXRjL2t1YmVybmV0ZXMvYm9vdHN0cmFwLXNlY3JldHMva3ViZWNvbmZpZyBrdWJlY3RsIC1uIGt1YmUtc3lzdGVtIHBhdGNoIGNvbmZpZ21hcCBleHRlbnNpb24tYXBpc2VydmVyLWF1dGhlbnRpY2F0aW9uIC0tcGF0Y2gtZmlsZSAke3RtcH0KICBpZiBbWyAkPyAtZXEgMCBdXTsgdGhlbgoJcm0gJHt0bXB9CglzdWNjZXNzPTIKICBmaQogIHJtICR7dG1wfQogIHNsZWVwIDYwCmRvbmUK\"}}]},\"kernelArguments\":{\"shouldExist\":[\"ipv6.disable=1\"]}}"
+    - name: Template contrail script
+      template:
+        src: contrail.sh.j2
+        dest: contrail.sh
+    - name: Run Contrail script
+      ansible.builtin.command:
+        cmd: bash contrail.sh
+    when: network_type == 'Contrail'
   - name: Copy manifests
     ansible.builtin.copy:
       src: "{{ manifests }}/"
@@ -76,10 +102,23 @@
       cmd: "./oc adm release extract --registry-config {{ pull_secret|default('openshift_pull.json') }} --command=openshift-install --to . {{ disconnected_url }}/{{ disconnected_prefix|default('ocp4') }}:{{ version|default('4.12-x86_64') }} --insecure"
       creates: openshift-install
     when: disconnected_url is defined
+  - name: Generate manifests
+    ansible.builtin.command:
+      cmd: "./openshift-install agent create cluster-manifests --dir {{ cluster }}"
   - name: Generate iso
     ansible.builtin.command:
       cmd: "./openshift-install agent create image --dir {{ cluster }} --log-level debug"
       creates: "{{ cluster }}/agent.x86_64.iso"
+  - name: Patch iso
+    block:
+    - name: Template Patch iso script
+      template:
+        src: patch_iso.sh.j2
+        dest: patch_iso.sh
+    - name: Run Patch iso script
+      ansible.builtin.command:
+        cmd: bash patch_iso.sh
+    when: ignition_config_override is defined
   - name: Remove old agent iso
     ansible.builtin.file:
       path: "/var/www/html/{{ cluster }}.iso"
@@ -95,10 +134,10 @@
       group: apache
   - name: Boot hosts with iso
     ansible.builtin.command:
-      cmd: "{{ python_venv_path|default('') }} {{ playbook_dir }}/boot.py {{ ansible_inventory_sources[0] }}"
+      cmd: "{{ python_venv_path|default('') }} {{ playbook_dir }}/boot.py {{ ansible_inventory_sources[0] }} {{ nodes|default(3) }}"
   - name: Remove agent iso
     ansible.builtin.file:
-      path: "{{ cluster }}/helix50.iso"
+      path: "{{ cluster }}/agent.x86_64.iso"
       state: absent
   - name: Remove install-config.yaml
     ansible.builtin.file:
@@ -117,6 +156,19 @@
     register: installresult
     until: installresult is not failed
     retries: 2
+  - name: Template install_operators.sh.j2
+    template:
+      src: install_operators.sh.j2
+      dest: install_operators.sh
+    when: operators is defined and operators|length>0
+  - name: Install operators
+    ansible.builtin.command:
+      cmd: bash install_operators.sh
+    when: operators is defined and operators|length>0
+  - name: Execute extra manifests
+    ansible.builtin.command:
+      cmd: "oc create -f {{ extra_manifests }}"
+    when: extra_manifests is directory
   - name: Remove old clusterconfigs dir
     ansible.builtin.file:
       path: "/root/clusterconfigs"
