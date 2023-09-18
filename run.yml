@@ -140,3 +140,7 @@
     ansible.builtin.shell:
       cmd: swapoff -a
 
+  - name: Remove agent iso from /var/www/html
+    ansible.builtin.file:
+      path: "/var/www/html/{{ cluster }}.iso"
+      state: absent
